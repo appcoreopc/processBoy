@@ -12,16 +12,27 @@ defmodule Processboy do
     loop_acceptor(socket)
   end
 
+  def init() do 
+    import Supervisor.Spec
+
+    children = [
+        worker(Task, [Processboy, :accept, [3001]])
+    ]
+
+    opts = [strategy: :one_for_one, name: Processboy]
+    Supervisor.start_link(children, opts)
+  end
+
   defp loop_acceptor(socket) do
     {:ok, client} = :gen_tcp.accept(socket)
-    {:ok, pid} = Task.Supervisor.start_child(Processboy.Supervisor, fn -> serve(client) 
-  end)
+    Logger.info "getting connections from client"
+    {:ok, pid} = serve(client) 
+
     :ok = :gen_tcp.controlling_process(client, pid)
     loop_acceptor(socket)
   end
 
   defp serve(socket) do
-    Logger.info "serving starts now..."
     socket
     |> read_line()
     |> write_line(socket)
@@ -37,5 +48,11 @@ defmodule Processboy do
   defp write_line(line, socket) do
     :gen_tcp.send(socket, line)
   end
+
+  def handle_all(:dequeue, _from, []), do: {:reply, nil, []}
+
+  def handle_all(:queue, _from, state), do: {:reply, state, state}
+
+
 
 end
