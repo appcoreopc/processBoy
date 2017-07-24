@@ -1,5 +1,6 @@
 defmodule Processboy do
-  use Supervisor
+ require Logger
+
 
   @moduledoc """
   Documentation for Processboy.
@@ -15,16 +16,36 @@ defmodule Processboy do
 
   """
 
-
-  def start_link do
-    Supervisor.start_link(__MODULE__, :ok)
+  def runServer(port) do 
+    {:ok, socket} = :gen_tcp.listen(port,
+                      [:binary, packet: :line, active: false, reuseaddr: true])
+    Logger.info "Accepting connections on port #{port}"
+    loop_acceptor(socket)
+  
   end
 
-  def init(:ok) do 
-     children = [
-      worker(Processboy.Registry, [Processboy.Registry])
-    ]
-     supervise(children, strategy: :one_for_all)
+  def loop_acceptor(socket) do 
+   {:ok, client} = :gen_tcp.accept(socket)
+   {:ok, pid} = Task.Supervisor.start_child(Processboy.TaskSupervisor, fn -> serve(client) end)
+   
+   :ok = :gen_tcp.controlling_process(client, pid)
+   loop_acceptor(socket)
 
-  end   
+  end
+
+  defp serve(socket) do 
+
+    socket |> read_line() |> write_line(socket)
+
+  end 
+
+  defp read_line(socket) do 
+    {:ok, data} = :gen_tcp.recv(socket, 0)
+    data
+  end
+
+  defp write_line(line, socket) do 
+    :gen_tcp.send(socket, line)
+  end 
+ 
 end
